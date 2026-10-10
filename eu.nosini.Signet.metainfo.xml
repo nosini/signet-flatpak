@@ -14,7 +14,7 @@
   <launchable type="desktop-id">eu.nosini.Signet.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image type="source" width="760" height="640">https://raw.githubusercontent.com/nosini/signet-linux/v0.1.0/data/screenshot.png</image>
+      <image type="source" width="760" height="640">https://raw.githubusercontent.com/nosini/signet-linux/v0.1.1/data/screenshot.png</image>
       <caption>Manage OpenPGP keys in your encrypted vault</caption>
     </screenshot>
   </screenshots>
@@ -24,5 +24,12 @@
   <url type="vcs-browser">https://github.com/nosini/signet-linux</url>
   <branding><color type="primary" scheme_preference="light">#183B38</color><color type="primary" scheme_preference="dark">#183B38</color></branding>
   <content_rating type="oars-1.1"/>
-  <releases><release version="0.1.0" date="2026-10-10"/></releases>
+  <releases>
+    <release version="0.1.1" date="2026-10-10">
+      <description>
+        <p>Setting up GnuPG before any key is imported no longer fails, and GnuPG errors now include GnuPG's own message.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-10-10"/>
+  </releases>
 </component>

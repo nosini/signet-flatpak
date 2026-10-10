@@ -60,8 +60,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/nosini/signet-linux.git
-        tag: v0.1.0
-        commit: 3bd706633aecf126f175c6c951e6d8a3fe09044a
+        tag: v0.1.1
+        commit: d888336a95fe678337ec361ce7af45c1f689412f
         x-checker-data:
           type: git
           tag-pattern: ^v([0-9]+\.[0-9]+\.[0-9]+)$
