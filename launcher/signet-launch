@@ -1,0 +1,6 @@
+#!/bin/sh
+# GnuPG must choose the shared runtime socket rather than a private home socket.
+set -eu
+umask 077
+mkdir -p "${XDG_RUNTIME_DIR:?}/gnupg" "${XDG_RUNTIME_DIR}/signet"
+exec /app/bin/signet-gui "$@"

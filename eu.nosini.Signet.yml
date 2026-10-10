@@ -1,0 +1,75 @@
+id: eu.nosini.Signet
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.llvm22
+command: signet-launch
+finish-args:
+  # X11 shared-memory rendering.
+  - --share=ipc
+  # Native Wayland windows.
+  - --socket=wayland
+  # Windows on desktops without Wayland.
+  - --socket=fallback-x11
+  # Accelerated GTK rendering.
+  - --device=dri
+  # Encrypted-vault WebDAV downloads and synchronization.
+  - --share=network
+  # Store WebDAV passwords in the desktop Secret Service.
+  - --talk-name=org.freedesktop.secrets
+  # Share the dedicated GnuPG agent socket with host GnuPG and Git.
+  - --filesystem=xdg-run/gnupg:create
+  # Share the Signet control socket with command-line clients.
+  - --filesystem=xdg-run/signet:create
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - '*.a'
+  - '*.la'
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm22/bin
+  env:
+    LIBCLANG_PATH: /usr/lib/sdk/llvm22/lib
+    CARGO_PROFILE_RELEASE_DEBUG: '1'
+modules:
+  - name: signet
+    buildsystem: simple
+    license-files:
+      - LICENSE
+      - THIRD-PARTY.md
+      - packaging/LICENSE-sequoia-ipc
+    build-options:
+      env:
+        CARGO_HOME: /run/build/signet/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo build --release --locked --offline --workspace
+      - install -Dm0755 target/release/signet ${FLATPAK_DEST}/bin/signet
+      - install -Dm0755 target/release/signet-gui ${FLATPAK_DEST}/bin/signet-gui
+      - install -Dm0755 signet-launch ${FLATPAK_DEST}/bin/signet-launch
+      - install -Dm0644 eu.nosini.Signet.desktop ${FLATPAK_DEST}/share/applications/eu.nosini.Signet.desktop
+      - install -Dm0644 eu.nosini.Signet.metainfo.xml ${FLATPAK_DEST}/share/metainfo/eu.nosini.Signet.metainfo.xml
+      - install -Dm0644 data/eu.nosini.Signet.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/eu.nosini.Signet.svg
+      - install -Dm0644 vendor/keepass/LICENSE ${FLATPAK_DEST}/share/licenses/eu.nosini.Signet/keepass/LICENSE
+      - |
+        mkdir -p ${FLATPAK_DEST}/share/licenses/eu.nosini.Signet/crates
+        find cargo/vendor -type f \( -iname 'LICENSE*' -o -iname 'COPYING*' -o -iname 'NOTICE*' \) \
+          -exec cp --parents -t ${FLATPAK_DEST}/share/licenses/eu.nosini.Signet/crates {} +
+    sources:
+      - type: git
+        url: https://github.com/nosini/signet-linux.git
+        tag: v0.1.0
+        commit: 3bd706633aecf126f175c6c951e6d8a3fe09044a
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([0-9]+\.[0-9]+\.[0-9]+)$
+          is-main-source: true
+      - cargo-sources.json
+      - type: file
+        path: launcher/signet-launch
+      - type: file
+        path: eu.nosini.Signet.desktop
+      - type: file
+        path: eu.nosini.Signet.metainfo.xml

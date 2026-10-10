@@ -1,0 +1,195 @@
+# Development
+
+## Layout
+
+The manifest `eu.nosini.Signet.yml` builds the Linux workspace using GNOME
+51 and the Rust and LLVM 22 SDK extensions. GnuPG, pinentry, curl, OpenSSL,
+GTK and libadwaita come from the runtime. `cargo-sources.json` pins the
+crates from Signet's Cargo.lock for an offline build, including the patched
+KeePass crate already included in the upstream source.
+
+The desktop file starts `launcher/signet-launch`, which prepares shared
+runtime directories before starting the GUI. The package installs both
+`signet-gui` and the `signet` CLI. Software-center metadata stays beside the
+manifest so the update checker can edit release entries. The icon comes
+from the upstream source. Crate license files and the upstream third-party notices
+are installed under share/licenses. No source patches are applied.
+
+`tests/check-installed.sh` checks the binaries, runtime tools, metadata,
+license and GnuPG runtime socket selection inside the installed app.
+`scripts/test-installed.sh` installs an exported local repository and runs
+those checks. The other scripts and workflows come from
+[flatpak-template](https://github.com/nosini/flatpak-template).
+
+## Building
+
+Install the builder, SDK and toolchains:
+
+```sh
+flatpak install --user flathub org.flatpak.Builder org.gnome.Sdk//51 \
+  org.gnome.Platform//51 org.freedesktop.Sdk.Extension.rust-stable//26.08 \
+  org.freedesktop.Sdk.Extension.llvm22//26.08
+flatpak run org.flatpak.Builder --user --install-deps-from=flathub \
+  --default-branch=stable --force-clean --repo=repo build-dir eu.nosini.Signet.yml
+bash scripts/test-installed.sh
+```
+
+The manifest pins a published stable release by `tag` and exact `commit`,
+and the metainfo screenshot uses the same tag. When moving to a new release,
+update all three and regenerate the Cargo sources from that revision.
+Publication is refused when the manifest has no release tag.
+
+To build a local Linux checkout before its revision is published, generate
+an ignored manifest beside the main one:
+
+```sh
+python3 scripts/local-manifest.py ../linux local-build.yml
+flatpak run org.flatpak.Builder --user --install-deps-from=flathub \
+  --default-branch=stable --force-clean --repo=repo build-dir local-build.yml
+bash scripts/test-installed.sh
+```
+
+Regenerate Cargo sources first if that checkout has a different lock file.
+The local manifest excludes its Git metadata and build output, and keeps
+all packaging assets and pinned dependency sources. It is for development;
+CI builds the main manifest.
+
+The installed-app script refuses to replace an existing installation. It
+adds a `local-test` remote for `repo/` and refreshes its summary. Remove the
+test app and remote when finished:
+
+```sh
+flatpak --user uninstall eu.nosini.Signet
+flatpak --user remote-delete local-test
+```
+
+To make an installable bundle:
+
+```sh
+flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+  repo signet.flatpak eu.nosini.Signet stable
+flatpak install --user signet.flatpak
+```
+
+## Cargo sources
+
+Use the lock file from the exact packaged source revision. The generator
+needs Python 3 with aiohttp and tomlkit. Install those with your system's
+package manager, then run:
+
+```sh
+bash scripts/generate-cargo-deps.sh ../linux/Cargo.lock
+```
+
+`scripts/builder-tools.sh` fetches flatpak-builder-tools at a pinned commit.
+The [Cargo generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)
+writes source archives, checksums and a Cargo source replacement config.
+The build sets `CARGO_HOME=/run/build/signet/cargo` and runs Cargo with
+`--locked --offline`; build commands have no network access. LLVM supplies
+libclang for the OpenSSL bindings. Keep both SDK extension versions aligned
+with the Freedesktop runtime underlying GNOME.
+
+## Permissions and host integration
+
+Window rendering uses Wayland, fallback X11, IPC and DRI. WebDAV uses the
+network and the desktop Secret Service. File import and export use GTK's
+file chooser portal, and startup uses the Background portal. No home or
+host filesystem permission is granted.
+
+`xdg-run/gnupg:create` shares GnuPG's socket directory, and
+`xdg-run/signet:create` shares the agent control directory. Configuration
+and vault storage remain private to the Flatpak. Host GnuPG reaches Signet
+by using the absolute GNUPGHOME assignment copied from the GUI; this points
+inside the app's persistent data directory. Both GnuPG implementations must
+resolve that home to the same runtime socket. Host requests can have an
+unidentified caller because the sandbox has a separate process namespace;
+Signet then asks each time and does not cache approvals.
+
+Check host integration with throwaway keys: create a vault, import a key,
+copy GNUPGHOME into a host shell, sign and verify a file, and exercise both
+approval and denial. Also check hidden-window prompts, file chooser access,
+WebDAV password storage and login startup on a desktop with portals. Do not
+run a native Signet service at the same time.
+
+For the packaged CLI:
+
+```sh
+flatpak run --command=signet eu.nosini.Signet status
+flatpak run --command=signet eu.nosini.Signet lock
+```
+
+## Checking
+
+```sh
+alias lint='flatpak run --command=flatpak-builder-lint org.flatpak.Builder'
+lint --exceptions --user-exceptions lint-exceptions.json manifest eu.nosini.Signet.yml
+lint appstream eu.nosini.Signet.metainfo.xml
+lint --exceptions --user-exceptions lint-exceptions.json repo repo
+shellcheck scripts/*.sh scripts/tests/*.sh tests/check-installed.sh launcher/signet-launch
+actionlint
+bash scripts/tests/test-update-upstream.sh
+bash scripts/tests/test-prepare-repository.sh
+```
+
+The local exceptions cover only the app-ID domain's missing website and
+screenshots hosted outside Flathub. Never submit the package or exception
+requests to Flathub.
+
+A shell against the installed app's Platform runtime:
+
+```sh
+flatpak run --command=sh eu.nosini.Signet
+```
+
+Add `--devel` to use the SDK for debugging. Bus access can be inspected with
+`flatpak run --log-session-bus eu.nosini.Signet`. Portal grants can be listed
+with `flatpak permission-show eu.nosini.Signet` and cleared with
+`flatpak permission-reset eu.nosini.Signet`.
+
+## CI and publication
+
+The Flatpak workflow lints, builds, exports and tests x86_64 and aarch64 on
+GNOME 51 CI images. It uploads an unsigned bundle for each architecture.
+The Checks workflow lints the scripts and workflows, parses metadata and
+runs the shared update and publishing script tests. Native debug information
+is exported as `eu.nosini.Signet.Debug`; list it, and any automatically
+exported Locale ref, when adding the app to the shared remote's registry.
+
+Publishing runs only on main with `PUBLISH_FLATPAK=true`. Its separate job
+signs tested builds, preserves five previous commits, generates static
+deltas, signs the software catalog and summary, and verifies those
+signatures before deploying to GitHub Pages. The signing key never enters
+the build job. Set Pages to GitHub Actions, store an ASCII-armored private
+Flatpak signing key without a passphrase in `FLATPAK_GPG_PRIVATE_KEY`, and
+then enable the variable. Generate and retain the key on your own machine;
+keep a backup, since replacing it breaks installed clients' trust.
+
+The repository URL defaults to
+`https://nosini.github.io/signet-flatpak/`; `FLATPAK_REPO_URL` overrides it.
+The publish job writes `signet.flatpakref` and `signet.flatpakrepo` with the
+public key embedded. After publication, install using the signed reference:
+
+```sh
+flatpak install --user https://nosini.github.io/signet-flatpak/signet.flatpakref
+```
+
+After the first publication, add the package's app and extension refs to
+[flatpak-repo](https://github.com/nosini/flatpak-repo)'s `apps.json`.
+
+## Updating
+
+The weekly Update workflow follows stable `vMAJOR.MINOR.PATCH` tags with
+flatpak-external-data-checker. It proposes new source pins and metainfo
+releases on `update/upstream`, then starts the build. If Cargo.lock changes,
+regenerate cargo-sources.json from the new revision on that branch. Check
+any changed assets and update the screenshot URL to the packaged tag.
+
+Updates are reviewed by default. `AUTO_MERGE_UPDATES=true` enables merging
+a successful automated update; changes made by people on the pending branch
+keep it under manual review. The workflow needs permission to create pull
+requests in the repository's Actions settings. GitHub disables schedules
+in public repositories after 60 days without activity.
+
+Keep the runtime version and the GNOME CI image tags in step when changing
+runtimes. Verify both SDK extension branches and installed-app behavior
+against the new Platform, rather than relying on SDK-only libraries.
