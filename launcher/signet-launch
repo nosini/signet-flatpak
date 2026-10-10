@@ -3,4 +3,7 @@
 set -eu
 umask 077
 mkdir -p "${XDG_RUNTIME_DIR:?}/gnupg" "${XDG_RUNTIME_DIR}/signet"
+# Flatpak creates missing xdg-run directories with mode 0755, which GnuPG
+# rejects for its socket directory.
+chmod 700 "$XDG_RUNTIME_DIR/gnupg" "$XDG_RUNTIME_DIR/signet"
 exec /app/bin/signet-gui "$@"

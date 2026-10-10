@@ -27,6 +27,15 @@ if flatpak info --user "$ref" >/dev/null 2>&1; then
   exit 1
 fi
 
+# CI containers have no login session. Provide the runtime directory a
+# session would, so Flatpak grants the app's xdg-run permissions.
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export XDG_RUNTIME_DIR
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR"
+fi
+
 # flatpak-builder doesn't always refresh the summary of an existing repo.
 flatpak build-update-repo repo
 flatpak --user install --noninteractive --no-related local-test "$ref"

@@ -9,7 +9,6 @@ test -x /app/bin/signet-gui
 test -x /app/bin/signet
 signet --version
 signet --help > /dev/null
-signet-gui --help > /dev/null
 gpg --version
 gpgconf --version
 curl --version
@@ -19,7 +18,9 @@ test -f /app/share/metainfo/eu.nosini.Signet.metainfo.xml
 test -f /app/share/icons/hicolor/scalable/apps/eu.nosini.Signet.svg
 
 # The agent must use the runtime path host GnuPG also computes, rather than
-# falling back to a socket in the sandbox's home directory.
+# falling back to a socket in the sandbox's home directory. The launcher
+# prepares the runtime directories before starting the app.
+signet-launch --help > /dev/null
 test -d "$XDG_RUNTIME_DIR/gnupg"
 test -d "$XDG_RUNTIME_DIR/signet"
 home=$(mktemp -d)
