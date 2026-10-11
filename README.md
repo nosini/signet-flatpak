@@ -70,10 +70,13 @@ Then turn on **Serve the standard GnuPG home** in Preferences, follow the
 instructions it shows, reopen Signet and choose **Set Up GnuPG**. Signet
 stops GnuPG's own agent when it starts, so keys stored in GnuPG itself can't
 be used while Signet runs. A Flatpak mail app such as Evolution also needs
-the GnuPG socket folder:
+the GnuPG socket folder. Without it, the app's GnuPG starts its own agent,
+which has none of your keys, and can lock the key database for everyone
+else. Grant it, then restart the app:
 
 ```sh
 flatpak override --user --filesystem=xdg-run/gnupg org.gnome.Evolution
+flatpak kill org.gnome.Evolution
 ```
 
 Closing the window keeps the agent running so GnuPG can still reach it. Use
