@@ -52,7 +52,29 @@ dedicated GnuPG home for it.
 Use **Copy GNUPGHOME** and paste the assignment into the shell where you run
 GnuPG or Git. Signet then asks for approval each time a program signs or
 decrypts with your key. **Copy Git Commands** in a key's details gives the
-commands that set Git up to sign commits with it.
+commands that set Git up to sign commits with it. **Export Secret Key…**
+saves a passphrase-protected backup of the key; other programs, such as
+Seahorse, can't export it through the agent.
+
+### Using it without GNUPGHOME
+
+To have GnuPG, Git and mail apps find Signet without setting anything, let
+Signet serve GnuPG's standard home, `~/.gnupg`. It needs one extra
+permission, which you grant on the host:
+
+```sh
+flatpak override --user --filesystem=~/.gnupg eu.nosini.Signet
+```
+
+Then turn on **Serve the standard GnuPG home** in Preferences, follow the
+instructions it shows, reopen Signet and choose **Set Up GnuPG**. Signet
+stops GnuPG's own agent when it starts, so keys stored in GnuPG itself can't
+be used while Signet runs. A Flatpak mail app such as Evolution also needs
+the GnuPG socket folder:
+
+```sh
+flatpak override --user --filesystem=xdg-run/gnupg org.gnome.Evolution
+```
 
 Closing the window keeps the agent running so GnuPG can still reach it. Use
 **Quit Signet** to stop it, and **Start at login** in Preferences to start it
@@ -75,7 +97,12 @@ describes locking, syncing and the other settings.
 - Signet can't see which program on your desktop is asking to sign or
   decrypt, because those programs run outside the sandbox. Its approval
   dialog says the requester can't be identified, and it asks every time,
-  even if you set it to remember approvals.
+  even if you set it to remember approvals. If that gets in the way, for
+  example when a mail app decrypts each message you open, turn off **Ask
+  before decrypting** or **Ask before signing** in Preferences. Any program
+  you run can then use the key for that while the vault is unlocked. A
+  native install of Signet can identify Flatpak apps and remember approvals
+  for each app.
 - The `signet` command-line tool is included. Run it with
   `flatpak run --command=signet eu.nosini.Signet`, for example
   `flatpak run --command=signet eu.nosini.Signet status`.
@@ -91,7 +118,8 @@ describes locking, syncing and the other settings.
   (`/run/user/UID/gnupg` and `/run/user/UID/signet`), so GnuPG, Git and the
   `signet` command on your desktop can reach the agent.
 
-It has no access to your home folder or other files. Vaults and keys you
+It has no access to your home folder or other files, unless you grant it
+`~/.gnupg` as described above. Vaults and keys you
 import come through the desktop's file chooser, and starting at login goes
 through the desktop's background permission.
 
