@@ -54,7 +54,9 @@ GnuPG or Git. Signet then asks for approval each time a program signs or
 decrypts with your key. **Copy Git Commands** in a key's details gives the
 commands that set Git up to sign commits with it. **Export Secret Key…**
 saves a passphrase-protected backup of the key; other programs, such as
-Seahorse, can't export it through the agent.
+Seahorse, can't export it through the agent. **Manage Subkeys…** adds,
+expires, revokes and deletes subkeys, and can attach an old key's subkey to
+a new key so mail encrypted to it can still be decrypted.
 
 ### Using it without GNUPGHOME
 
