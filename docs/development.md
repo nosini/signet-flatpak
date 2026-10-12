@@ -127,6 +127,7 @@ lint appstream eu.nosini.Signet.metainfo.xml
 lint --exceptions --user-exceptions lint-exceptions.json repo repo
 shellcheck scripts/*.sh scripts/tests/*.sh tests/check-installed.sh launcher/signet-launch
 actionlint
+python3 scripts/tests/test-release-workflow.py
 bash scripts/tests/test-update-upstream.sh
 bash scripts/tests/test-prepare-repository.sh
 ```
@@ -158,11 +159,12 @@ runs the shared update and publishing script tests. Native debug information
 is exported as `eu.nosini.Signet.Debug`; list it, and any automatically
 exported Locale ref, when adding the app to the shared remote's registry.
 
-With `PUBLISH_FLATPAK=true`, pushing a `v*` tag builds and publishes the
-signed Flatpak repository from the tagged commit. Manual Flatpak runs on
-main also publish, so packaging fixes can be shipped without a new tag.
-Pull request builds and manual runs on other refs produce unsigned bundle
-artifacts only. Its separate publishing job
+With `PUBLISH_FLATPAK=true`, pushing a stable version tag builds and
+publishes the signed Flatpak repository from the tagged commit. Manual
+Flatpak runs on main also publish, so packaging fixes can be shipped
+without a new tag.
+Pull request builds, prerelease builds and manual runs on other refs produce
+unsigned bundle artifacts only. Its separate publishing job
 signs tested builds, preserves five previous commits, generates static
 deltas, signs the software catalog and summary, and verifies those
 signatures before deploying to GitHub Pages. The signing key never enters
@@ -177,6 +179,21 @@ Branch rule for manual publication. Then push a tag pointing to the
 packaging commit to build, or run the Flatpak workflow manually on main.
 The manifest's upstream Signet release pin is separate from this packaging
 tag and must remain a stable release.
+
+Stable tags have the form `v0.1.4`. A numeric suffix such as `v0.1.4-1`
+identifies a stable packaging revision of the same upstream version. Other
+suffixes, such as `v0.1.5-rc1`, build without replacing the stable Flatpak
+repository and create GitHub prereleases that cannot become the latest
+stable release. Use a new tag for each packaging revision; keep published
+tags unchanged.
+
+After a tag build passes validation and any required Pages deployment
+succeeds, the workflow creates the GitHub Release automatically using the
+runner's `GITHUB_TOKEN` and attaches the tested x86_64 and aarch64 `.flatpak`
+bundles. Rerunning the tag build replaces assets on an existing release.
+With `PUBLISH_FLATPAK` disabled, tag builds still create releases with
+unsigned bundles. Manual builds do not create releases. No manual GitHub
+Release creation or separate authenticated GitHub session is needed.
 
 The repository URL defaults to
 `https://nosini.github.io/signet-flatpak/`; `FLATPAK_REPO_URL` overrides it.
@@ -202,9 +219,9 @@ Updates are reviewed by default. `AUTO_MERGE_UPDATES=true` enables merging
 a successful automated update; changes made by people on the pending branch
 keep it under manual review. Merging an update does not publish it or start
 another build on main. Push a tag at the merged packaging commit to build
-and ship the update. The workflow needs permission to
-create pull requests in the repository's Actions settings. GitHub disables schedules
-in public repositories after 60 days without activity.
+and ship the update. The workflow needs permission to create pull requests
+in the repository's Actions settings. GitHub disables schedules in public
+repositories after 60 days without activity.
 
 Keep the runtime version and the GNOME CI image tags in step when changing
 runtimes. Verify both SDK extension branches and installed-app behavior
