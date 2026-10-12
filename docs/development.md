@@ -148,14 +148,21 @@ with `flatpak permission-show eu.nosini.Signet` and cleared with
 
 ## CI and publication
 
-The Flatpak workflow lints, builds, exports and tests x86_64 and aarch64 on
-GNOME 51 CI images. It uploads an unsigned bundle for each architecture.
+The Flatpak workflow runs when a tag starting with `v` is pushed, for pull
+requests and on manual runs. Pushes to main run the Checks workflow
+without building the app. The Flatpak workflow lints, builds, exports and
+tests x86_64 and aarch64 on GNOME 51 CI images. It uploads an unsigned
+bundle for each architecture.
 The Checks workflow lints the scripts and workflows, parses metadata and
 runs the shared update and publishing script tests. Native debug information
 is exported as `eu.nosini.Signet.Debug`; list it, and any automatically
 exported Locale ref, when adding the app to the shared remote's registry.
 
-Publishing runs only on main with `PUBLISH_FLATPAK=true`. Its separate job
+With `PUBLISH_FLATPAK=true`, pushing a `v*` tag builds and publishes the
+signed Flatpak repository from the tagged commit. Manual Flatpak runs on
+main also publish, so packaging fixes can be shipped without a new tag.
+Pull request builds and manual runs on other refs produce unsigned bundle
+artifacts only. Its separate publishing job
 signs tested builds, preserves five previous commits, generates static
 deltas, signs the software catalog and summary, and verifies those
 signatures before deploying to GitHub Pages. The signing key never enters
@@ -163,6 +170,13 @@ the build job. Set Pages to GitHub Actions, store an ASCII-armored private
 Flatpak signing key without a passphrase in `FLATPAK_GPG_PRIVATE_KEY`, and
 then enable the variable. Generate and retain the key on your own machine;
 keep a backup, since replacing it breaks installed clients' trust.
+
+If the `github-pages` environment restricts deployment branches and tags,
+allow the packaging tags with a Tag rule such as `v*`, and retain the main
+Branch rule for manual publication. Then push a tag pointing to the
+packaging commit to build, or run the Flatpak workflow manually on main.
+The manifest's upstream Signet release pin is separate from this packaging
+tag and must remain a stable release.
 
 The repository URL defaults to
 `https://nosini.github.io/signet-flatpak/`; `FLATPAK_REPO_URL` overrides it.
@@ -186,8 +200,10 @@ any changed assets and update the screenshot URL to the packaged tag.
 
 Updates are reviewed by default. `AUTO_MERGE_UPDATES=true` enables merging
 a successful automated update; changes made by people on the pending branch
-keep it under manual review. The workflow needs permission to create pull
-requests in the repository's Actions settings. GitHub disables schedules
+keep it under manual review. Merging an update does not publish it or start
+another build on main. Push a tag at the merged packaging commit to build
+and ship the update. The workflow needs permission to
+create pull requests in the repository's Actions settings. GitHub disables schedules
 in public repositories after 60 days without activity.
 
 Keep the runtime version and the GNOME CI image tags in step when changing
