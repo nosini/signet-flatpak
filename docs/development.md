@@ -159,10 +159,36 @@ runs the shared update and publishing script tests. Native debug information
 is exported as `eu.nosini.Signet.Debug`; list it, and any automatically
 exported Locale ref, when adding the app to the shared remote's registry.
 
+CI restores `.flatpak-builder`, including downloaded sources, completed
+module results and the C/C++ compiler cache. Flatpak checks the build inputs
+and rebuilds affected modules when sources, dependencies, patches or the SDK
+change. Lint and installed-app checks run every time; the cache is saved
+only after they pass.
+
+Each run saves a fresh snapshot, separated by app ID, architecture, Flatpak
+branch and build workflow version, which includes the CI container image.
+The next run restores the newest compatible snapshot. To start a new cache
+namespace, bump `flatpak-v1` in both the key and restore prefix in the
+workflow. Cache misses build normally.
+
+GitHub lets tags and pull requests restore the default branch's cache,
+but caches from one tag cannot be restored by another tag. To warm the
+shared cache without publishing or creating a release, run the Flatpak
+workflow on `main` with **cache_only** selected, or run this from the
+packaging checkout:
+
+```sh
+gh workflow run flatpak.yml --ref main -f cache_only=true
+```
+
+Refresh it before releases when needed. GitHub removes caches unused for
+more than seven days and evicts older entries when the repository's storage
+limit is reached; see its [cache access and retention rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching).
+
 With `PUBLISH_FLATPAK=true`, pushing a stable version tag builds and
 publishes the signed Flatpak repository from the tagged commit. Manual
-Flatpak runs on main also publish, so packaging fixes can be shipped
-without a new tag.
+Flatpak runs on main without `cache_only` also publish, so packaging fixes
+can be shipped without a new tag.
 Pull request builds, prerelease builds and manual runs on other refs produce
 unsigned bundle artifacts only. Its separate publishing job
 signs tested builds, preserves five previous commits, generates static

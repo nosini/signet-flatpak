@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the workflow's tag classification and release commands offline."""
+"""Exercise the workflow's cache, publication gates and release commands offline."""
 import json
 import os
 from pathlib import Path
@@ -83,12 +83,50 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ("workflow_dispatch", "refs/heads/update/upstream", "", "true", False),
             ("workflow_dispatch", "refs/tags/v0.1.4", "true", "true", False),
         ):
-            with self.subTest(event=event, ref=ref, enabled=enabled):
-                self.assertEqual(condition(
-                    expression, github=Namespace(event_name=event, ref=ref),
-                    vars=Namespace(PUBLISH_FLATPAK=enabled),
-                    steps=Namespace(release=Namespace(outputs=Namespace(stable=stable))),
-                ), expected)
+            for cache_only in (False, True):
+                with self.subTest(event=event, ref=ref, enabled=enabled, cache_only=cache_only):
+                    self.assertEqual(condition(
+                        expression, github=Namespace(event_name=event, ref=ref),
+                        vars=Namespace(PUBLISH_FLATPAK=enabled),
+                        inputs=Namespace(cache_only=cache_only),
+                        steps=Namespace(release=Namespace(outputs=Namespace(stable=stable))),
+                    ), expected and not cache_only)
+
+    def test_cache_only_is_an_optional_boolean(self):
+        option = WORKFLOW[True]["workflow_dispatch"]["inputs"]["cache_only"]
+        self.assertEqual(option["type"], "boolean")
+        self.assertIs(option["default"], False)
+        self.assertFalse(option.get("required", False))
+
+    def test_cache_snapshots_are_isolated_and_saved_after_validation(self):
+        steps = WORKFLOW["jobs"]["build"]["steps"]
+        restore = next(step for step in steps if step.get("id") == "build-cache")
+        save = next(step for step in steps if step.get("uses") == "actions/cache/save@v6")
+        builder = next(step for step in steps if step.get("uses", "").startswith(
+            "flatpak/flatpak-github-actions/flatpak-builder@"))
+        self.assertEqual(restore["uses"], "actions/cache/restore@v6")
+        self.assertEqual(restore["with"]["path"], ".flatpak-builder")
+        self.assertEqual(save["with"]["path"], restore["with"]["path"])
+        self.assertEqual(save["with"]["key"], "${{ steps.build-cache.outputs.cache-primary-key }}")
+        prefix = restore["with"]["restore-keys"].strip()
+        self.assertEqual(len(prefix.splitlines()), 1)
+        for part in ("${{ runner.os }}", "${{ matrix.arch }}", "${{ env.APP_ID }}",
+                     "${{ env.FLATPAK_BRANCH }}", "${{ hashFiles('.github/workflows/flatpak.yml') }}"):
+            self.assertIn(part, prefix)
+        self.assertEqual(restore["with"]["key"],
+                         prefix + "${{ github.run_id }}-${{ github.run_attempt }}")
+        self.assertIs(builder["with"]["cache"], True)
+        self.assertIs(builder["with"]["restore-cache"], False)
+        self.assertIs(builder["with"]["save-cache"], False)
+        self.assertEqual(builder["with"]["state-dir"], restore["with"]["path"])
+        self.assertLess(steps.index(restore), steps.index(builder))
+        for name in ("Lint the exported build", "Check the installed app against its runtime"):
+            check = next(step for step in steps if step.get("name") == name)
+            self.assertLess(steps.index(builder), steps.index(check))
+            self.assertLess(steps.index(check), steps.index(save))
+            self.assertFalse(check.get("continue-on-error", False))
+        self.assertNotIn("if", save)
+        self.assertFalse(save.get("continue-on-error", False))
 
     def test_release_waits_for_validation_and_required_deployment(self):
         job = WORKFLOW["jobs"]["release"]
@@ -115,11 +153,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
             values.update(overrides)
             needs = Namespace(**{name: Namespace(result=values[name]) for name in job["needs"]})
             needs.setup.outputs = Namespace(publish=values["publish_enabled"])
-            with self.subTest(overrides=overrides):
-                self.assertEqual(condition(
-                    job["if"], github=Namespace(event_name=values["event"], ref=values["ref"]),
-                    needs=needs, cancelled=lambda: values["cancelled"],
-                ), expected)
+            for cache_only in (False, True):
+                with self.subTest(overrides=overrides, cache_only=cache_only):
+                    self.assertEqual(condition(
+                        job["if"], github=Namespace(event_name=values["event"], ref=values["ref"]),
+                        inputs=Namespace(cache_only=cache_only),
+                        needs=needs, cancelled=lambda: values["cancelled"],
+                    ), expected and not cache_only)
 
     def release_commands(self, *, stable="true", exists="false", fail="false"):
         bundles = self.directory / "bundles"
